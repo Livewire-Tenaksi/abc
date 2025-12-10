@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Simple E‑Commerce SPA</title>
+</head>
+<body style="font-family: Arial, Helvetica, sans-serif; margin:0; background:#f5f5f7;">
+  <!-- App Shell -->
+  <header style="background:#ff3b30; color:white; padding:16px 20px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 2px 6px rgba(0,0,0,0.05);">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <div style="font-weight:700; font-size:20px;">Bamboo Shop</div>
+      <input id="search" placeholder="Search products..." style="padding:8px 10px; border-radius:6px; border:none; outline:none; width:220px;" />
+    </div>
+    <nav style="display:flex; gap:12px; align-items:center;">
+      <button id="homeBtn" style="background:transparent; border:none; color:white; cursor:pointer; font-weight:600;">Home</button>
+      <button id="cartBtn" style="background:rgba(255,255,255,0.15); border:none; color:white; padding:8px 12px; border-radius:8px; cursor:pointer;">Cart (<span id="cartCount">0</span>)</button>
+    </nav>
+  </header>
+
+  <main id="app" style="padding:20px; max-width:1100px; margin:24px auto;">
+    <!-- views will be injected here -->
+  </main>
+
+  <footer style="text-align:center; padding:18px; color:#666;">
+    © Bamboo Shop — Simple single-file SPA demo
+  </footer>
+
+  <template id="home-template">
+    <section>
+      <h2 style="margin:0 0 12px 0;">Featured Products</h2>
+      <div id="productsGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:14px;"></div>
+    </section>
+  </template>
+
+  <template id="product-template">
+    <section>
+      <button id="backBtn" style="background:#eee;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;margin-bottom:12px;">← Back</button>
+      <div style="display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap;">
+        <div style="flex:1; min-width:220px;">
+          <div id="productImage" style="height:260px; border-radius:8px; background:#ddd; display:flex; align-items:center; justify-content:center; font-size:14px; color:#444;"></div>
+        </div>
+        <div style="flex:1.6; min-width:260px;">
+          <h3 id="productTitle" style="margin-top:0;"></h3>
+          <p id="productDesc" style="color:#444; line-height:1.4;"></p>
+          <div style="margin:12px 0; font-size:20px; font-weight:700;">₹ <span id="productPrice"></span></div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input id="qty" type="number" min="1" value="1" style="width:80px; padding:6px; border-radius:6px; border:1px solid #ddd;" />
+            <button id="addToCartBtn" style="background:#ff3b30; color:white; border:none; padding:10px 14px; border-radius:8px; cursor:pointer;">Add to cart</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </template>
+
+  <template id="cart-template">
+    <section>
+      <h2 style="margin-top:0;">Your Cart</h2>
+      <div id="cartList" style="background:white; border-radius:8px; padding:12px; box-shadow:0 1px 4px rgba(0,0,0,0.03);"></div>
+      <div id="cartSummary" style="margin-top:12px; text-align:right;"></div>
+    </section>
+  </template>
+
+  <script>
+    // --- Demo product data ---
+    const PRODUCTS = [
+      { id:'p1', title:'Bamboo Water Bottle 500ml', price:399, img:'', desc:'Lightweight stainless inner with bamboo outer. Good for daily use.' },
+      { id:'p2', title:'Handmade Bamboo Stool', price:2499, img:'', desc:'Sturdy 3-leg stool made from treated bamboo. Natural finish.' },
+      { id:'p3', title:'Bamboo Table Lamp', price:1799, img:'', desc:'Ambient table lamp with bamboo shade and warm LED.' },
+      { id:'p4', title:'Folding Relax Chair', price:3299, img:'', desc:'Portable folding chair for patios and balconies.' },
+      { id:'p5', title:'Bamboo Dining Table (Small)', price:8999, img:'', desc:'Compact dining table fits 4 people. Sustainably sourced.' }
+    ];
+
+    // --- Simple SPA state ---
+    const state = {
+      view: 'home', // home | product | cart
+      currentProductId: null,
+      cart: JSON.parse(localStorage.getItem('cart') || '[]')
+    };
+
+    // --- Utilities ---
+    const $ = (sel, ctx=document) => ctx.querySelector(sel);
+    const render = () => {
+      const app = $('#app');
+      app.innerHTML = '';
+      if(state.view === 'home') renderHome(app);
+      else if(state.view === 'product') renderProduct(app);
+      else if(state.view === 'cart') renderCart(app);
+      updateCartCount();
+    };
+
+    const saveCart = () => {
+      localStorage.setItem('cart', JSON.stringify(state.cart));
+      updateCartCount();
+    };
+
+    const updateCartCount = () => {
+      const total = state.cart.reduce((s,i)=>s+i.qty,0);
+      $('#cartCount').textContent = total;
+    };
+
+    const addToCart = (productId, qty=1) => {
+      const item = state.cart.find(i=>i.id===productId);
+      if(item) item.qty += qty;
+      else {
+        const p = PRODUCTS.find(x=>x.id===productId);
+        state.cart.push({ id:productId, title:p.title, price:p.price, qty });
+      }
+      saveCart();
+      alert('Added to cart');
+    };
+
+    const removeFromCart = (productId) => {
+      state.cart = state.cart.filter(i=>i.id!==productId);
+      saveCart();
+      render();
+    };
+
+    const changeQty = (productId, qty) => {
+      const item = state.cart.find(i=>i.id===productId);
+      if(!item) return;
+      item.qty = Math.max(1, qty);
+      saveCart();
+      render();
+    };
+
+    // --- Views ---
+    function renderHome(container){
+      const tpl = $('#home-template').content.cloneNode(true);
+      const grid = tpl.querySelector('#productsGrid');
+      const searchVal = $('#search').value.trim().toLowerCase();
+      const filtered = PRODUCTS.filter(p=>p.title.toLowerCase().includes(searchVal) || p.desc.toLowerCase().includes(searchVal));
+      filtered.forEach(p=>{
+        const card = document.createElement('div');
+        card.style.cssText = 'background:white;border-radius:10px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,0.04);display:flex;flex-direction:column;gap:8px;'
+        card.innerHTML = `\
+          <div style="height:140px;border-radius:8px;background:#eee;display:flex;align-items:center;justify-content:center;color:#666;">Image</div>\
+          <div style="font-weight:700;">${p.title}</div>\
+          <div style="color:#666;font-size:13px;">${p.desc}</div>\
+          <div style="margin-top:auto;display:flex;justify-content:space-between;align-items:center;">\
+            <div style="font-weight:700;">₹ ${p.price}</div>\
+            <div style="display:flex;gap:8px;">\
+              <button data-id="${p.id}" class="viewBtn" style="border:none;background:#f1f1f1;padding:8px 10px;border-radius:8px;cursor:pointer;">View</button>\
+              <button data-id="${p.id}" class="quickAdd" style="background:#ff3b30;color:white;border:none;padding:8px 10px;border-radius:8px;cursor:pointer;">Add</button>\
+            </div>\
+          </div>`;
+        grid.appendChild(card);
+      });
+      container.appendChild(tpl);
+
+      // attach listeners
+      grid.querySelectorAll('.viewBtn').forEach(b=>b.addEventListener('click', e=>{
+        state.currentProductId = e.currentTarget.dataset.id;
+        state.view = 'product';
+        render();
+      }));
+      grid.querySelectorAll('.quickAdd').forEach(b=>b.addEventListener('click', e=>{
+        addToCart(e.currentTarget.dataset.id, 1);
+      }));
+    }
+
+    function renderProduct(container){
+      const tpl = $('#product-template').content.cloneNode(true);
+      const pid = state.currentProductId;
+      const p = PRODUCTS.find(x=>x.id===pid);
+      tpl.querySelector('#productTitle').textContent = p.title;
+      tpl.querySelector('#productDesc').textContent = p.desc;
+      tpl.querySelector('#productPrice').textContent = p.price;
+      tpl.querySelector('#productImage').textContent = 'Product Image';
+
+      tpl.querySelector('#backBtn').addEventListener('click', ()=>{ state.view='home'; render(); });
+      tpl.querySelector('#addToCartBtn').addEventListener('click', ()=>{
+        const qty = parseInt(tpl.querySelector('#qty').value) || 1;
+        addToCart(pid, qty);
+      });
+      container.appendChild(tpl);
+    }
+
+    function renderCart(container){
+      const tpl = $('#cart-template').content.cloneNode(true);
+      const list = tpl.querySelector('#cartList');
+      if(state.cart.length === 0){
+        list.innerHTML = '<div style="padding:20px;color:#666;">Your cart is empty.</div>';
+      } else {
+        state.cart.forEach(item=>{
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;gap:10px;';
+          row.innerHTML = `\
+            <div style="flex:1;">\
+              <div style="font-weight:700;">${item.title}</div>\
+              <div style="font-size:13px;color:#666;">₹ ${item.price} each</div>\
+            </div>\
+            <div style="display:flex;gap:8px;align-items:center;">\
+              <input type="number" min="1" value="${item.qty}" data-id="${item.id}" style="width:72px;padding:6px;border-radius:6px;border:1px solid #ddd;">\
+              <div style="width:90px;text-align:right;">₹ ${item.price * item.qty}</div>\
+              <button data-id="${item.id}" class="removeBtn" style="background:#fff;border:1px solid #ff3b30;color:#ff3b30;padding:6px 8px;border-radius:8px;cursor:pointer;">Remove</button>\
+            </div>`;
+          list.appendChild(row);
+        });
+
+        // qty handlers
+        list.querySelectorAll('input[type="number"]').forEach(inp=>{
+          inp.addEventListener('change', e=>{
+            const id = e.currentTarget.dataset.id;
+            const q = parseInt(e.currentTarget.value) || 1;
+            changeQty(id, q);
+          });
+        });
+        list.querySelectorAll('.removeBtn').forEach(b=>b.addEventListener('click', e=>{
+          removeFromCart(e.currentTarget.dataset.id);
+        }));
+      }
+
+      const summary = tpl.querySelector('#cartSummary');
+      const subtotal = state.cart.reduce((s,i)=>s + i.price * i.qty, 0);
+      const shipping = subtotal > 4999 || subtotal===0 ? 0 : 149;
+      const total = subtotal + shipping;
+      summary.innerHTML = `\
+        <div style="background:white;padding:12px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.03);display:inline-block;min-width:260px;">\
+          <div style="margin-bottom:8px;">Subtotal: <strong>₹ ${subtotal}</strong></div>\
+          <div style="margin-bottom:8px;">Shipping: <strong>₹ ${shipping}</strong></div>\
+          <div style="font-size:18px;font-weight:700;">Total: ₹ ${total}</div>\
+          <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end;">\
+            <button id="continueShopping" style="background:#eee;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;">Continue</button>\
+            <button id="checkoutBtn" style="background:#ff3b30;color:white;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;">Checkout</button>\
+          </div>\
+        </div>`;
+
+      container.appendChild(tpl);
+
+      tpl.querySelector('#continueShopping').addEventListener('click', ()=>{ state.view='home'; render(); });
+      tpl.querySelector('#checkoutBtn').addEventListener('click', ()=>{
+        if(state.cart.length===0){ alert('Cart empty'); return; }
+        // basic checkout demo
+        alert('Thank you! Your order is placed (demo).');
+        state.cart = [];
+        saveCart();
+        state.view='home';
+        render();
+      });
+    }
+
+    // --- Initial wiring ---
+    document.addEventListener('DOMContentLoaded', ()=>{
+      // nav buttons
+      $('#homeBtn').addEventListener('click', ()=>{ state.view='home'; render(); });
+      $('#cartBtn').addEventListener('click', ()=>{ state.view='cart'; render(); });
+      $('#search').addEventListener('input', ()=>{ if(state.view==='home') render(); });
+
+      // keyboard: press / to focus search
+      document.addEventListener('keydown', (e)=>{ if(e.key === '/') { e.preventDefault(); $('#search').focus(); } });
+
+      // initial render
+      render();
+    });
+
+    // expose for debug in console
+    window.__APP = { state, PRODUCTS, render };
+  </script>
+</body>
+</html>
